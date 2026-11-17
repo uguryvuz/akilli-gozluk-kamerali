@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kameralı Akıllı Gözlük Simülasyonu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  /* Düzen: kontrol şeridi; solda yandan görünüm, kuşbakışı koridor + kamera görüntüsü ve kamera grafiği; sağda gözlük, ölçümler ve K0/K1 sonuçları */
+  --bg:#f4f4f1; --surface:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e; --muted:#77756f; --line:#e1e0d9; --axis:#c3c2b7;
+  --accent:#2a78d6; --sag:#eb6834; --laser:#e34948; --tof:#1baf7a; --zone:#eda100; --cam:#6250d6;
+  --ground:#e7e5dd; --ground-low:#cfccc1; --ground-edge:#a9a69a; --paint:#ffffff; --tactile:#e9c75a; --shadow:#000000;
+  --good:#006300; --bad:#b8302f; --late:#8a5a00;
+  --chip-good:#e2f0e2; --chip-bad:#fae4e2; --chip-late:#f9efd6; --chip-info:#ebebe7;
+  --font-display:"IBM Plex Sans Condensed","Arial Narrow",Arial,sans-serif;
+  --font-body:"IBM Plex Sans","Segoe UI",Arial,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink-2:#c3c2b7; --muted:#9b9991; --line:#2c2c2a; --axis:#45443f;
+    --accent:#3987e5; --sag:#d95926; --laser:#e66767; --tof:#199e70; --zone:#c98500; --cam:#9085e9;
+    --ground:#2a2a27; --ground-low:#1f1f1c; --ground-edge:#5d5b54; --paint:#e8e8e2; --tactile:#b89a3c; --shadow:#000000;
+    --good:#5cc95c; --bad:#ff8f86; --late:#e2b552; --chip-good:#16301a; --chip-bad:#3a1b19; --chip-late:#382c10; --chip-info:#262624;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink-2:#c3c2b7; --muted:#9b9991; --line:#2c2c2a; --axis:#45443f;
+  --accent:#3987e5; --sag:#d95926; --laser:#e66767; --tof:#199e70; --zone:#c98500; --cam:#9085e9;
+  --ground:#2a2a27; --ground-low:#1f1f1c; --ground-edge:#5d5b54; --paint:#e8e8e2; --tactile:#b89a3c; --shadow:#000000;
+  --good:#5cc95c; --bad:#ff8f86; --late:#e2b552; --chip-good:#16301a; --chip-bad:#3a1b19; --chip-late:#382c10; --chip-info:#262624;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1280px;margin:0 auto;padding:20px 20px 40px;display:flex;flex-direction:column;gap:16px}
+header h1{font-family:var(--font-display);font-weight:600;font-size:28px;line-height:1.15;margin:0 0 4px;text-wrap:balance}
+header p{margin:0;color:var(--ink-2);max-width:82ch}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.card h2{font-family:var(--font-display);font-weight:600;font-size:17px;margin:0 0 8px}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end}
+.ctl{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ctl > span,.ctl > label{font-size:12px;color:var(--ink-2);font-weight:500}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+button,select{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--axis);border-radius:7px;padding:6px 11px;cursor:pointer}
+button:hover,select:hover{border-color:var(--ink-2)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;min-width:104px}
+.seg{display:inline-flex;border:1px solid var(--axis);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 10px;background:transparent}
+.seg button + button{border-left:1px solid var(--axis)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);font-weight:600}
+input[type=range]{width:150px;accent-color:var(--accent)}
+.val{font-family:var(--font-mono);font-size:13px;min-width:6.5em}
+.check{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2)}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.pair{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink-2);margin:0 0 8px}
+.legend i{display:inline-block;width:16px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
+.legend i.sq{height:10px;width:12px;border:1px solid var(--axis)}
+canvas{display:block;width:100%}
+.glasses svg{width:100%;height:auto;display:block}
+.motor.on{fill:var(--zone)}
+@keyframes buzz{0%{transform:translate(0,0)}25%{transform:translate(1.2px,-.8px)}50%{transform:translate(-1px,.9px)}75%{transform:translate(.8px,1px)}100%{transform:translate(0,0)}}
+.motor.on{animation:buzz .06s linear infinite;transform-box:fill-box;transform-origin:center}
+.vibnow{font-weight:600;font-size:15px;margin:4px 0 0;min-height:1.5em}
+.vibnow.idle{color:var(--muted);font-weight:500}
+dl.nums{display:grid;grid-template-columns:1fr auto;gap:3px 12px;margin:0;font-size:13.5px}
+dl.nums dt{color:var(--ink-2)}
+dl.nums dd{margin:0;text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.state{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;font-size:13px}
+.chip{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+.chip.ok{background:var(--chip-good);color:var(--good)}
+.chip.alert{background:var(--chip-bad);color:var(--bad)}
+.chip.pend{background:var(--chip-late);color:var(--late)}
+.chip.off{background:var(--chip-info);color:var(--ink-2)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{font-size:12px;color:var(--ink-2);font-weight:600}
+td.n{white-space:nowrap;text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+tbody th{font-weight:500;color:var(--ink-2)}
+.small{font-size:12.5px;color:var(--ink-2);margin:8px 0 0}
+.lower{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px}
+ol.log{list-style:none;margin:0;padding:0;font-size:13.5px}
+ol.log li{display:grid;grid-template-columns:4.2em 6.6em minmax(0,1fr) auto;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);align-items:baseline}
+ol.log .t{font-family:var(--font-mono);color:var(--muted);font-size:12.5px}
+ol.log .src{font-weight:600;font-size:12.5px}
+ol.log .vib{font-size:11.5px;color:var(--ink-2);margin-left:6px}
+.notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.notes h3{font-size:14px;margin:0 0 4px;font-weight:600}
+.notes p{margin:0;font-size:13.5px;color:var(--ink-2)}
+.c-sol{color:var(--accent)} .c-sag{color:var(--sag)} .c-cam{color:var(--cam)}
+@media (max-width:1040px){.main{grid-template-columns:1fr}.lower,.notes{grid-template-columns:1fr}}
+@media (max-width:640px){.pair{grid-template-columns:1fr}.wrap{padding:14px 14px 30px}header h1{font-size:23px}ol.log li{grid-template-columns:3.6em 5.8em minmax(0,1fr)}ol.log li .chip{grid-column:3}}
+@media (prefers-reduced-motion: reduce){.motor.on{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Kameralı Akıllı Gözlük Simülasyonu</h1>
+    <p>Kameralı başvuru sürümünün canlı modeli. Lazer ve öne bakan sensör formdaki kurallarla çalışır. Kamera, yürüyüş hattının sağındaki ve solundaki seviye farklarını arar. Kameranın kararları, ön denemede ölçülen başarıma göre ayarlanmış bir olasılık modelinden gelir; böylece yakalama oranı ile yanlış uyarı arasındaki dengeyi kendiniz deneyebilirsiniz.</p>
+  </header>
+
+  <section class="card toolbar" aria-label="Kontroller">
+    <div class="ctl"><span>Oynatma</span>
+      <div class="row"><button id="playBtn" class="primary" type="button">Duraklat</button><button id="resetBtn" type="button">Baştan başlat</button></div>
+    </div>
+    <div class="ctl"><span>Hız</span>
+      <div class="seg" id="speedSeg" role="group" aria-label="Simülasyon hızı">
+        <button type="button" data-v="0.5" aria-pressed="false">0,5×</button><button type="button" data-v="1" aria-pressed="true">1×</button><button type="button" data-v="2" aria-pressed="false">2×</button>
+      </div>
+    </div>
+    <div class="ctl"><label for="headMode">Baş hareketi</label>
+      <select id="headMode"><option value="senaryo" selected>Senaryo: eğme ve kaldırma</option><option value="duz">Hep karşıya bakış</option><option value="elle">Elle ayarla</option></select>
+    </div>
+    <div class="ctl"><label for="thetaSlider">Baş eğimi (elle)</label>
+      <div class="row"><input id="thetaSlider" type="range" min="-15" max="30" step="1" value="0"><span class="val" id="thetaVal">0°</span></div>
+    </div>
+    <div class="ctl"><span>Kamera uyarıları</span>
+      <div class="seg" id="camSeg" role="group" aria-label="Kamera uyarıları">
+        <button type="button" data-v="K1" aria-pressed="true">Açık (K1)</button><button type="button" data-v="K0" aria-pressed="false">Kapalı (K0)</button>
+      </div>
+    </div>
+    <div class="ctl"><span>Zemin bandı</span>
+      <div class="seg" id="bandSeg" role="group" aria-label="Zemin bandı seçimi">
+        <button type="button" data-v="egim" aria-pressed="true">Baş eğimine göre</button><button type="button" data-v="sabit" aria-pressed="false">Sabit</button>
+      </div>
+    </div>
+    <div class="ctl"><label for="dataSel">Modelin eğitim verisi</label>
+      <select id="dataSel"><option value="plan" selected>Formdaki plan (60 nokta)</option><option value="cok">Daha çeşitli veri (180 nokta)</option></select>
+    </div>
+    <div class="ctl"><label for="piSlider">Kamera karar eşiği π</label>
+      <div class="row"><input id="piSlider" type="range" min="0.50" max="0.97" step="0.01" value="0.80"><span class="val" id="piVal">0,80</span></div>
+    </div>
+    <div class="ctl"><span>Ses</span><label class="check"><input id="soundChk" type="checkbox"> Titreşimi sesle de ver</label></div>
+  </section>
+
+  <div class="main">
+    <div class="stack">
+      <section class="card">
+        <h2>Yandan görünüm</h2>
+        <div class="legend">
+          <span><i style="border-color:var(--laser)"></i>Zemine bakan lazer</span>
+          <span><i style="border-color:var(--tof)"></i>Öne bakan sensörün bölge sıraları</span>
+          <span><i style="border-color:var(--cam);border-top-width:5px"></i>Kameranın incelediği zemin</span>
+        </div>
+        <canvas id="scene" role="img" aria-label="Yürüyen kullanıcının yandan görünümü"></canvas>
+      </section>
+      <div class="pair">
+        <section class="card">
+          <h2>Kuşbakışı: yürüme koridoru</h2>
+          <div class="legend">
+            <span><i class="sq" style="background:var(--ground-low)"></i>15 cm aşağıdaki zemin</span>
+            <span><i style="border-color:var(--cam);border-top-style:dashed"></i>Sistemin varsaydığı bant</span>
+            <span><i style="border-color:var(--cam)"></i>Gerçekte incelenen zemin</span>
+          </div>
+          <canvas id="top" role="img" aria-label="Yürüme koridorunun kuşbakışı görünümü, kameranın bandı ve bölgeleri"></canvas>
+        </section>
+        <section class="card">
+          <h2>Kameranın gördüğü</h2>
+          <div class="legend"><span>Mor çerçeve: incelenen bant (sol · orta · sağ)</span></div>
+          <canvas id="cam" role="img" aria-label="Kameranın perspektif görüntüsü"></canvas>
+        </section>
+      </div>
+      <section class="card">
+        <h2>Kameranın bölge olasılıkları</h2>
+        <div class="legend">
+          <span><i style="border-color:var(--accent)"></i><b class="c-sol">Sol</b> bölge</span>
+          <span><i style="border-color:var(--sag)"></i><b class="c-sag">Sağ</b> bölge</span>
+          <span><i style="border-color:var(--muted);border-top-style:dashed"></i>Karar eşiği π (art arda 2 karede aşılırsa uyarı)</span>
+        </div>
+        <canvas id="chart" aria-label="Son 10 saniyede sol ve sağ bölge olasılıkları"></canvas>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="card glasses">
+        <h2>Gözlük (üstten) ve titreşim</h2>
+        <svg viewBox="0 0 300 190" aria-label="Gözlüğün üstten görünümü ve iki saptaki titreşim motorları">
+          <g fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round">
+            <rect x="38" y="40" width="224" height="30" rx="12"></rect>
+            <line x1="44" y1="66" x2="44" y2="150"></line><line x1="256" y1="66" x2="256" y2="150"></line>
+          </g>
+          <rect x="46" y="45" width="90" height="20" rx="8" fill="var(--line)"></rect>
+          <rect x="164" y="45" width="90" height="20" rx="8" fill="var(--line)"></rect>
+          <rect x="140" y="30" width="20" height="9" rx="2" fill="var(--tof)"></rect>
+          <circle cx="150" cy="80" r="5" fill="var(--cam)"></circle>
+          <rect x="143" y="88" width="14" height="7" rx="2" fill="var(--laser)"></rect>
+          <g font-family="IBM Plex Sans, Arial, sans-serif" font-size="11" fill="var(--ink-2)">
+            <text x="150" y="22" text-anchor="middle">öne bakan ToF</text>
+            <text x="139" y="84" text-anchor="end">kamera</text>
+            <text x="162" y="96">zemin lazeri</text>
+            <text x="44" y="183" text-anchor="middle">Sol sap</text>
+            <text x="256" y="183" text-anchor="middle">Sağ sap</text>
+            <text x="150" y="132" text-anchor="middle" fill="var(--muted)">↑ ön</text>
+          </g>
+          <circle id="mL" class="motor" cx="44" cy="158" r="11" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"></circle>
+          <circle id="mR" class="motor" cx="256" cy="158" r="11" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"></circle>
+        </svg>
+        <p id="vibNow" class="vibnow idle">Titreşim yok</p>
+      </section>
+      <section class="card">
+        <h2>Anlık durum</h2>
+        <dl class="nums">
+          <dt>Baş eğimi θ (IMU)</dt><dd id="nTheta">—</dd>
+          <dt>İncelenen bant (önde)</dt><dd id="nBand">—</dd>
+          <dt>Kamera sol/orta/sağ</dt><dd id="nP">—</dd>
+          <dt>Lazer Δz (eşik ±7 cm)</dt><dd id="nDz">—</dd>
+        </dl>
+        <div class="state"><span>Lazer (orta şerit)</span><span id="stL" class="chip off">—</span></div>
+        <div class="state"><span>Kamera (yanlar)</span><span id="stC" class="chip off">—</span></div>
+        <div class="state"><span>Öne bakan sensör</span><span id="stF" class="chip off">—</span></div>
+      </section>
+      <section class="card">
+        <h2>Yandaki seviye farkları: K0 ve K1</h2>
+        <table>
+          <thead><tr><th></th><th style="text-align:right">K0 kamerasız</th><th style="text-align:right" class="c-cam">K1 kameralı</th></tr></thead>
+          <tbody>
+            <tr><th>Zamanında (≥ 1 m önce)</th><td class="n" id="k0z">0</td><td class="n" id="k1z">0</td></tr>
+            <tr><th>Geç</th><td class="n" id="k0g">0</td><td class="n" id="k1g">0</td></tr>
+            <tr><th>Kaçırılan</th><td class="n" id="k0k">0</td><td class="n" id="k1k">0</td></tr>
+            <tr><th>Ek yanlış uyarı</th><td class="n">—</td><td class="n" id="k1y">0</td></tr>
+            <tr><th>Yanlış uyarı / 100 m</th><td class="n">—</td><td class="n" id="k1y100">—</td></tr>
+          </tbody>
+        </table>
+        <p class="small" id="kTot">—</p>
+      </section>
+    </div>
+  </div>
+
+  <div class="lower">
+    <section class="card"><h2>Olay kaydı</h2><ol class="log" id="log"></ol></section>
+    <section class="card">
+      <h2>Bu geçişteki parkur öğeleri</h2>
+      <table><thead><tr><th>Öğe</th><th>Kimin işi</th><th>Bu geçişte</th></tr></thead><tbody id="itemBody"></tbody></table>
+      <p class="small">Parkur 44 m: 9–14 m arasında solda paralel iniş, 16 m’de iniş ve 21 m’de çıkış, 25–28 m arasında sağda yarım genişlikte iniş; boya çizgisi, hissedilebilir yüzey ve gölge çeldiricileri; iki asılı engel.</p>
+    </section>
+  </div>
+
+  <section class="card notes">
+    <div>
+      <h3>Kamera ne yapıyor?</h3>
+      <p>Kamera görüntüsü, lazerin öğrendiği yükseklik ve IMU’dan gelen baş eğimiyle kullanıcının 1–3 m önündeki, ±0,75 m yanındaki zeminin kuşbakışı görüntüsüne çevrilir. Model sol, orta ve sağ bölge için seviye farkı olasılığı verir. Sol ya da sağ bölgede olasılık π eşiğini art arda 2 karede (5 Hz) aşarsa o saptaki motor iniş örüntüsüyle titreşir.</p>
+    </div>
+    <div>
+      <h3>Neyi deneyebilirsiniz?</h3>
+      <p>π eşiğini düşürünce yandaki inişler daha çok yakalanır ama boya çizgisi ve hissedilebilir yüzeyde yanlış uyarı artar. “Sabit” bantta baş eğilince kamera yanlış yere bakar; kuşbakışı panelde kesikli ve düz çerçevelerin ayrıldığını görürsünüz. “Daha çeşitli veri” seçeneği, ön denemedeki 180 noktalı modelin eğilimini gösterir.</p>
+    </div>
+    <div>
+      <h3>Simülasyonun sınırları</h3>
+      <p>Kameranın kararları gerçek bir sinir ağından değil, ön denemede (sentetik görüntülerle) ölçülen yakalama ve yanlış uyarı eğilimlerine göre ayarlanmış bir olasılık modelinden gelir. Her geçişte her kenar ve çeldiricinin “zorluğu” rastgele seçilir; bu, modelin bazı yerlerde iyi, bazı yerlerde kötü çalışmasını taklit eder. Yalnızca ilk geçiş, bir yakalama, bir kaçırma ve bir yanlış uyarı örneği gösterecek biçimde sabitlendi. Gerçek dünyada ıslak zemin, parlama ve kalabalık işi daha da zorlaştırır.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+const DEG = Math.PI / 180;
+const P = {
+  H: 1.60, userH: 1.72, tau: 0.07, gateMin: 0.6, gateMax: 4.5, refWin: 3.0, refractory: 3.0,
+  lidarSigma: 0.015, imuSigma: 0.4, bobAmp: 0.02, pitchBob: 1.0, stepFreq: 1.8, speed: 1.0, initTime: 2.0,
+  corridor: 0.4, fwdMax: 2.5, hMin: 1.0, passLen: 44, tofHalf: 22.5, tofTilt: 5, beta: 37.5, camPitch: 35
+};
+// --- parkur
+const GROUND = [{ x0: -100, g: 0 }, { x0: 16, g: -0.15 }, { x0: 21, g: 0 }];
+const EDGES = [{ x: 16, type: 'inis', label: '15 cm iniş' }, { x: 21, type: 'cikis', label: '15 cm çıkış' }];
+const REGIONS = [
+  { id: 'R1', name: 'Solda paralel iniş', x0: 9, x1: 14, y0: 0.45, y1: 3, dz: -0.15, side: 'sol', lateral: true },
+  { id: 'R2', name: 'Önde basamak', x0: 16, x1: 21, y0: -3, y1: 3, dz: -0.15, lateral: false },
+  { id: 'R3', name: 'Sağda yarım genişlikte iniş', x0: 25, x1: 28, y0: -3, y1: -0.15, dz: -0.15, side: 'sag', lateral: true }
+];
+const DIS = [
+  { type: 'boya', name: 'Enine boya çizgisi', x0: 5.5, x1: 5.62, y0: -3, y1: 3 },
+  { type: 'hissedilebilir', name: 'Hissedilebilir yüzey şeridi', x0: 30, x1: 30.5, y0: -3, y1: 3 },
+  { type: 'golge', name: 'Yol boyunca gölge', x0: 33, x1: 37, y0: 0.2, y1: 0.7 },
+  { type: 'boya', name: 'Yol boyunca şerit çizgisi', x0: 38, x1: 42, y0: -0.5, y1: -0.4 }
+];
+const OBS = [
+  { name: 'Asılı tabela', where: 'baş hizası, sağda', x0: 19.0, x1: 19.06, y0: 1.55, y1: 1.95, L: 0.2, w: 0.3 },
+  { name: 'Ağaç dalı', where: 'göğüs hizası, solda', x0: 35.0, x1: 35.35, y0: 1.15, y1: 1.35, L: -0.25, w: 0.15 }
+];
+const SCEN = [
+  { a: 5.8, b: 8.0, th: 18, why: 'yere bakıyor' },
+  { a: 12.0, b: 13.0, th: 10, why: 'hafifçe aşağı bakıyor' },
+  { a: 22.0, b: 24.5, th: 15, why: 'aşağı bakarak yürüyor' },
+  { a: 31.0, b: 32.0, th: -10, why: 'yukarı bakıyor' }
+];
+const BAND = { x0: 1, x1: 3, regs: [['sol', 0.25, 0.75], ['orta', -0.25, 0.25], ['sag', -0.75, -0.25]] };
+const DET = {   // ön denemedeki eğilimlere göre ayarlanmış olasılık modeli (logit ölçeği)
+  plan: { pos: 0.8, sigPos: 1.1, disAdd: 0 }, cok: { pos: 1.6, sigPos: 1.1, disAdd: 0.9 },
+  neg: -3.3, dis: { boya: -0.6, hissedilebilir: -0.9, golge: -1.6 }, sigLoc: 1.1, sigF: 0.7
+};
+const TYPE = { inis: 'İniş', cikis: 'Çıkış', bas: 'Baş hizası', gogus: 'Göğüs hizası', yan: 'Yanda seviye farkı', okunamiyor: 'Zemin okunamıyor' };
+const SIDE = { sag: 'sağ sap', sol: 'sol sap', orta: 'iki sap', iki: 'iki sap' };
+const SIDE_ADJ = { sag: 'sağda', sol: 'solda', orta: 'ortada' };
+const PAT = {
+  inis: { prio: 1, p: [[0, 0.4], [0.6, 1.0]], both: true },
+  yan: { prio: 2, p: [[0, 0.4], [0.6, 1.0]] },
+  bas: { prio: 3, p: [[0, 0.08], [0.16, 0.24]] },
+  gogus: { prio: 4, p: [[0, 0.12]] },
+  cikis: { prio: 5, p: [[0, 0.1], [0.2, 0.3], [0.4, 0.5]], both: true },
+  okunamiyor: { prio: 6, p: [[0, 0.6]], both: true }
+};
+const PATDESC = { inis: '2 × 400 ms', yan: '2 × 400 ms tek sapta', bas: 'hızlı çift darbe', gogus: 'tek darbe', cikis: '3 × 100 ms', okunamiyor: 'zayıf uzun titreşim' };
+
+function groundAt(x) { let g = GROUND[0].g; for (const s of GROUND) { if (x >= s.x0) g = s.g; else break; } return g; }
+function levelAt(x, y) { let z = 0; for (const r of REGIONS) if (x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1) z += r.dz; return z; }
+function disAt(x, y) { for (let i = 0; i < DIS.length; i++) { const d = DIS[i]; if (x >= d.x0 && x < d.x1 && y >= d.y0 && y < d.y1) return i; } return -1; }
+OBS.forEach(o => { const g = groundAt(o.x0 + 0.01); o.ya0 = g + o.y0; o.ya1 = g + o.y1; o.lat = Math.max(0, Math.abs(o.L) - o.w); o.side = o.L > 0.1 ? 'sag' : (o.L < -0.1 ? 'sol' : 'orta'); });
+
+function gauss() { let u = 0, v = 0; while (u === 0) u = Math.random(); while (v === 0) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+function median(a) { const b = a.slice().sort((p, q) => p - q); const n = b.length; return n ? (n % 2 ? b[(n - 1) / 2] : (b[n / 2 - 1] + b[n / 2]) / 2) : NaN; }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const sigm = z => 1 / (1 + Math.exp(-z));
+const num = (v, d = 2) => Math.abs(v).toFixed(d).replace('.', ',');
+const fmt = (v, d = 2) => Number.isFinite(v) ? (v < 0 && Math.abs(v) >= 0.5 * Math.pow(10, -d) ? '−' : '') + num(v, d) : '—';
+const fmtS = (v, d = 2) => Number.isFinite(v) ? (v >= 0 ? '+' : '−') + num(v, d) : '—';
+const fmtTh = th => Math.abs(th) < 0.5 ? '0°' : `${num(th, 0)}° ${th > 0 ? 'aşağı' : 'yukarı'}`;
+
+function castGround(px, ys, gam) {
+  const t = Math.tan(gam); if (t <= 0.02) return null;
+  for (let i = 0; i < GROUND.length; i++) {
+    const a = GROUND[i].x0, b = i + 1 < GROUND.length ? GROUND[i + 1].x0 : 1e9, g = GROUND[i].g;
+    if (b <= px) continue;
+    const xe = Math.max(a, px), ye = ys - (xe - px) * t;
+    if (ye <= g) return { x: xe, y: ye };
+    const xh = px + (ys - g) / t;
+    if (xh <= b) return { x: xh, y: g };
+  }
+  return null;
+}
+function castRay(px, ys, eps) {
+  let best = null;
+  const c = Math.cos(eps), s = Math.sin(eps), t = Math.tan(eps), fov = Math.tan(P.tofHalf * DEG);
+  const take = (d, x, y, obs) => { if (d > 0.02 && (!best || d < best.d)) best = { d, x, y, obs }; };
+  for (const o of OBS) {
+    if (o.x1 <= px) continue;
+    const dx = o.x0 - px;
+    if (dx > 0 && o.lat > dx * fov) continue;
+    if (o.x0 > px) { const y = ys + dx * t; if (y >= o.ya0 && y <= o.ya1) take(dx / c, o.x0, y, o); }
+    if (s > 1e-6 && ys < o.ya0) { const xb = px + (o.ya0 - ys) / t; if (xb >= Math.max(o.x0, px) && xb <= o.x1) take(Math.hypot(xb - px, o.ya0 - ys), xb, o.ya0, o); }
+    if (s < -1e-6 && ys > o.ya1) { const xt = px + (o.ya1 - ys) / t; if (xt >= Math.max(o.x0, px) && xt <= o.x1) take(Math.hypot(xt - px, o.ya1 - ys), xt, o.ya1, o); }
+  }
+  if (s < -1e-6) { const g = castGround(px, ys, -eps); if (g) take(Math.hypot(g.x - px, g.y - ys), g.x, g.y, null); }
+  return best;
+}
+
+const U = { playing: true, speed: 1, mode: 'senaryo', manual: 0, cam: 'K1', band: 'egim', data: 'plan', pi: 0.80, sound: false };
+let S;
+function mkY1() { return { ref: NaN, buf: [], k: 0, cond: null, cnt: 0, last: { inis: -1e9, cikis: -1e9 }, val: NaN, valid: false, gate: true, blindStart: null, blindLast: -1e9 }; }
+function mkTot() { return { zaman: 0, gec: 0, kacan: 0, yanlis: 0 }; }
+function freshState() {
+  return {
+    t: 0, tp: 0, tick: 0, pass: 1, p: 0, phase: 0, thBase: 0, thTarget: 0, thWhy: '', theta: 0, thetaM: 0, bob: 0, ys: P.H,
+    hit: null, R: NaN, z: NaN, x: NaN, initZ: [], y1: mkY1(), det: [null, null],
+    laserTot: { zaman: 0, gec: 0, kacan: 0, yanlis: 0 }, edgesPassed: 0, dist: 0,
+    tofAcc: 0, zones: [], fwdCnt: 0, fwd: null, fwdLast: -1e9,
+    camAcc: 0, camP: [0, 0, 0], camAbove: [false, false, false], camLast: [-1e9, -1e9, -1e9], camInfo: null,
+    lat: { K0: mkTot(), K1: mkTot() }, latPass: {}, camFA: 0, camFAm: 0, diff: {},
+    vib: null, pendingLevel: null, flash: null, hist: [], events: [], log: [], obsStat: OBS.map(() => ({})), disStat: DIS.map(() => 0), disTot: DIS.map(() => 0)
+  };
+}
+function newDifficulty() {
+  const d = {};
+  for (const r of REGIONS) d[r.id] = gauss();
+  DIS.forEach((_, i) => { d['D' + i] = gauss(); });
+  return d;
+}
+let logDirty = true, itemDirty = true, lastSig = '';
+function addLog(src, text, verdict, vib) { S.log.unshift({ t: S.t, src, text, verdict, vib }); if (S.log.length > 40) S.log.pop(); logDirty = true; }
+function requestVib(type, side) {
+  const pat = PAT[type], v = S.vib;
+  if (v && S.t < v.end && PAT[v.type].prio <= pat.prio) return false;
+  S.vib = { type, side: pat.both ? 'iki' : side, t0: S.t, end: S.t + pat.p[pat.p.length - 1][1] };
+  return true;
+}
+function motorState() {
+  const v = S.vib;
+  if (!v || S.t >= v.end) return { L: false, R: false, v: null };
+  const tt = S.t - v.t0, on = PAT[v.type].p.some(([a, b]) => tt >= a && tt < b);
+  const both = v.side === 'iki' || v.side === 'orta';
+  return { L: on && (both || v.side === 'sol'), R: on && (both || v.side === 'sag'), v };
+}
+
+// ---------- lazer (Y1, formdaki kurallar)
+function pushRef(m, v) {
+  m.buf.push([S.t, v]);
+  while (m.buf.length && m.buf[0][0] < S.t - P.refWin) m.buf.shift();
+  if (++m.k % 10 === 0 && m.buf.length >= 30) m.ref = median(m.buf.map(b => b[1]));
+}
+function runY1() {
+  const m = S.y1, ok = Number.isFinite(S.R);
+  m.gate = ok && S.x >= P.gateMin && S.x <= P.gateMax;
+  m.valid = ok && m.gate;
+  m.val = ok ? S.z - m.ref : NaN;
+  const thr = ok ? Math.max(P.tau, 0.03 + S.x * Math.tan(1 * DEG)) : P.tau;
+  const need = ok && S.x < 1.0 ? 20 : 10;
+  let c = null;
+  if (m.valid) { if (m.val > thr) c = 'inis'; else if (m.val < -thr) c = 'cikis'; }
+  if (c && c === m.cond) m.cnt++; else { m.cond = c; m.cnt = c ? 1 : 0; m.fired = false; }
+  if (c && m.cnt >= need && !m.fired && S.t - m.last[c] >= P.refractory) { m.last[c] = S.t; m.fired = true; onLevel(c); }
+  if (m.valid && Math.abs(m.val) < P.tau) pushRef(m, S.z);
+  if (!m.valid) {
+    if (m.blindStart == null) m.blindStart = S.t;
+    else if (S.t - m.blindStart > 1.5 && S.t - m.blindLast > 3) { m.blindLast = S.t; requestVib('okunamiyor', 'iki'); addLog('Lazer', 'Zemin okunamıyor', 'bilgi', true); }
+  } else m.blindStart = null;
+}
+function onLevel(type) {
+  const gF = groundAt(S.p), h = S.hit;
+  let edgeIdx = -1;
+  if (h) {
+    const dy = h.y - gF;
+    if ((type === 'inis' && dy < -0.05) || (type === 'cikis' && dy > 0.05))
+      for (let i = 0; i < EDGES.length; i++) { const e = EDGES[i]; if (e.type === type && e.x > S.p && e.x <= h.x + 0.02) { edgeIdx = i; break; } }
+  }
+  let verdict, text;
+  if (edgeIdx >= 0 && S.det[edgeIdx] == null) {
+    const d = EDGES[edgeIdx].x - S.p; S.det[edgeIdx] = d;
+    if (d >= 1) { S.laserTot.zaman++; verdict = 'dogru'; } else { S.laserTot.gec++; verdict = 'gec'; }
+    text = `${TYPE[type]} uyarısı · kenara ${fmt(d, 2)} m kala`;
+  } else if (edgeIdx >= 0) { verdict = 'bilgi'; text = `${TYPE[type]} uyarısı yinelendi`; }
+  else { S.laserTot.yanlis++; verdict = 'yanlis'; text = `${TYPE[type]} uyarısı · ışın düz zeminde`; }
+  if (!requestVib(type, 'iki')) S.pendingLevel = { type, until: S.t + 1 };
+  S.flash = { t: S.t, type };
+  S.events.push({ t: S.t, src: 'L', type, verdict });
+  addLog('Lazer', text, verdict, true);
+}
+
+// ---------- kamera
+function bandMap(xa, ya) {
+  // sistemin varsaydığı (xa, ya) noktasına bakan pikselin gerçekte gördüğü zemin noktası
+  const thA = U.band === 'egim' ? S.thetaM : 0, HA = U.band === 'egim' ? (Number.isFinite(S.y1.ref) ? S.y1.ref : P.H) : P.H;
+  const Ht = S.ys - groundAt(S.p) + 0;
+  const da = Math.atan2(HA, xa), dt = da + (S.theta - thA) * DEG;
+  if (dt <= 2 * DEG) return [60, ya * 30];
+  const xt = Ht / Math.tan(dt);
+  return [xt, ya * Math.hypot(xt, Ht) / Math.hypot(xa, HA)];
+}
+function regionTruth(map) {
+  const feet = levelAt(S.p, 0);
+  return BAND.regs.map(([name, y0, y1]) => {
+    let hz = null, dis = -1, bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
+    for (let i = 0; i <= 5; i++) for (let j = 0; j <= 2; j++) {
+      const xa = BAND.x0 + (BAND.x1 - BAND.x0) * i / 5, ya = y0 + (y1 - y0) * j / 2;
+      const [xt, yt] = map ? bandMap(xa, ya) : [xa, ya];
+      const X = S.p + xt;
+      bx0 = Math.min(bx0, X); bx1 = Math.max(bx1, X); by0 = Math.min(by0, yt); by1 = Math.max(by1, yt);
+      if (levelAt(X, yt) !== feet) { for (const r of REGIONS) if (X >= r.x0 && X < r.x1 && yt >= r.y0 && yt < r.y1) hz = hz || r; if (!hz) hz = { id: 'feet', lateral: false }; }
+    }
+    for (let i = 0; i < DIS.length && dis < 0; i++) { const d = DIS[i]; if (d.x0 < bx1 && d.x1 > bx0 && d.y0 < by1 && d.y1 > by0) dis = i; }
+    return { hz, dis };
+  });
+}
+function camFrame() {
+  const seen = regionTruth(true), truth = regionTruth(false);
+  const dp = DET[U.data];
+  S.camInfo = { seen, truth };
+  for (let r = 0; r < 3; r++) {
+    const s = seen[r];
+    let mu;
+    if (s.hz) mu = dp.pos + dp.sigPos * (S.diff[s.hz.id] ?? 0);
+    else if (s.dis >= 0) mu = DET.dis[DIS[s.dis].type] + dp.disAdd + DET.sigLoc * S.diff['D' + s.dis];
+    else mu = DET.neg;
+    if (U.band === 'sabit') mu -= 0.06 * Math.max(0, Math.abs(S.thBase) - 6);
+    const p = sigm(mu + DET.sigF * gauss());
+    S.camP[r] = p;
+    const above = p > U.pi;
+    if (r !== 1 && above && S.camAbove[r] && S.t - S.camLast[r] >= P.refractory) { S.camLast[r] = S.t; onCamWarn(r, truth[r]); }
+    S.camAbove[r] = above;
+  }
+}
+function onCamWarn(r, tr) {
+  const side = r === 0 ? 'sol' : 'sag';
+  let verdict, text;
+  const reg = tr.hz && tr.hz.lateral && tr.hz.side === side ? tr.hz : null;
+  if (reg) {
+    const lp = S.latPass[reg.id];
+    if (!lp.first) {
+      lp.first = { p: S.p, d: reg.x0 - S.p };
+      const timely = reg.x0 - S.p >= 1.0;
+      S.lat.K1[timely ? 'zaman' : 'gec']++;
+      verdict = timely ? 'dogru' : 'gec';
+      text = `${SIDE_ADJ[side]} seviye farkı · ${reg.x0 - S.p >= 0 ? `kenarın başlangıcına ${fmt(reg.x0 - S.p, 2)} m kala` : 'kenarın yanında'}`;
+    } else { verdict = 'bilgi'; text = `${SIDE_ADJ[side]} seviye farkı uyarısı yinelendi`; }
+  } else if (tr.hz) {
+    verdict = 'bilgi'; text = `${SIDE_ADJ[side]} seviye farkı · öndeki basamak (lazer de görüyor)`;
+  } else {
+    S.camFA++; verdict = 'yanlis';
+    const di = tr.dis >= 0 ? tr.dis : (S.camInfo.seen[r].dis);
+    if (di >= 0) { S.disStat[di]++; S.disTot[di]++; }
+    text = `${SIDE_ADJ[side]} seviye farkı · düz zemin${di >= 0 ? ` (${DIS[di].name.toLowerCase()})` : ''}`;
+    itemDirty = true;
+  }
+  const drive = U.cam === 'K1';
+  if (drive) requestVib('yan', side);
+  S.events.push({ t: S.t, src: 'K', side, verdict });
+  addLog('Kamera', text, verdict, drive);
+}
+
+// ---------- öne bakan sensör
+function tofFrame(init) {
+  const range = 3.5, Href = Number.isFinite(S.y1.ref) ? S.y1.ref : P.H;
+  const zones = [], qual = [];
+  for (let j = 0; j < 8; j++) {
+    const dc = P.tofHalf - (j + 0.5) * (2 * P.tofHalf / 8) + P.tofTilt;
+    let best = null;
+    for (const k of [-1, 0, 1]) { const r = castRay(S.p, S.ys, (dc + k * 1.875 - S.theta) * DEG); if (r && r.d <= range && (!best || r.d < best.d)) best = r; }
+    const zn = { dc, best, q: false };
+    if (best) {
+      const R = best.d + gauss() * 0.02, eps = (dc - S.thetaM) * DEG, x = R * Math.cos(eps), h = Href + R * Math.sin(eps), lat = best.obs ? best.obs.lat : 0;
+      if (x <= P.fwdMax && h >= P.hMin && h <= P.userH + 0.1 && lat <= P.corridor) { zn.q = true; qual.push({ x, h, obs: best.obs }); }
+    }
+    zones.push(zn);
+  }
+  S.zones = zones;
+  if (init) { S.fwdCnt = 0; S.fwd = null; return; }
+  if (qual.length) S.fwdCnt++; else { S.fwdCnt = 0; S.fwd = null; }
+  if (S.fwdCnt >= 2) {
+    qual.sort((a, b) => a.x - b.x);
+    const near = qual[0], grp = qual.filter(q => q.obs === near.obs);
+    const hmin = Math.min(...grp.map(q => q.h)), cls = hmin >= 0.8 * P.userH ? 'bas' : 'gogus', side = near.obs ? near.obs.side : 'orta';
+    S.fwd = { cls, side, x: near.x, obs: near.obs };
+    const f = clamp(1 + 3 * (2.5 - near.x) / 1.5, 1, 4);
+    if (S.t - S.fwdLast >= 1 / f && requestVib(cls, side)) S.fwdLast = S.t;
+    if (near.obs) { const st = S.obsStat[OBS.indexOf(near.obs)]; if (!st.warn) { const d = near.obs.x0 - S.p; st.warn = { cls, side, d }; addLog('Öne bakan', `${TYPE[cls]} engel (${near.obs.name.toLowerCase()}) · ${SIDE_ADJ[side]} · ${fmt(d, 2)} m önde`, 'dogru', true); itemDirty = true; } }
+  }
+}
+
+function newPass() {
+  S.pass++; S.p = 0; S.tp = 0; S.phase = 0; S.y1 = mkY1(); S.initZ = []; S.det = [null, null];
+  S.obsStat = OBS.map(() => ({})); S.disStat = DIS.map(() => 0); S.fwdCnt = 0; S.fwd = null;
+  S.diff = newDifficulty(); S.latPass = { R1: {}, R3: {} };
+  addLog('Sistem', `${S.pass}. geçiş başladı · 2 s ayakta başlatma`, 'bilgi', false); itemDirty = true;
+}
+function step() {
+  const dt = 0.01;
+  S.t += dt; S.tp += dt; S.tick++;
+  const init = S.tp < P.initTime, prevP = S.p;
+  if (!init) { S.p += P.speed * dt; S.dist += P.speed * dt; S.phase += 2 * Math.PI * (P.stepFreq / 2) * dt; }
+  let target = 0, why = '';
+  if (U.mode === 'elle') target = U.manual;
+  else if (U.mode === 'senaryo' && !init) for (const s of SCEN) if (S.p >= s.a && S.p < s.b) { target = s.th; why = s.why; }
+  S.thTarget = target; S.thWhy = why;
+  S.thBase += (target - S.thBase) * (1 - Math.exp(-dt / 0.25));
+  S.theta = S.thBase + (init ? 0 : P.pitchBob * Math.sin(2 * S.phase + 0.8));
+  S.bob = init ? 0 : P.bobAmp * Math.sin(2 * S.phase);
+  S.thetaM = S.theta + gauss() * P.imuSigma;
+  S.ys = groundAt(S.p) + P.H + S.bob;
+  S.hit = castGround(S.p, S.ys, (P.beta + S.theta) * DEG);
+  S.R = S.hit ? Math.hypot(S.hit.x - S.p, S.hit.y - S.ys) + gauss() * P.lidarSigma : NaN;
+  const gm = (P.beta + S.thetaM) * DEG;
+  S.z = S.R * Math.sin(gm); S.x = S.R * Math.cos(gm);
+  if (init) { if (Number.isFinite(S.R)) S.initZ.push(S.z); S.y1.valid = false; if (S.tp + dt >= P.initTime) { S.y1.ref = median(S.initZ); S.y1.buf = S.initZ.slice(-150).map(v => [S.t, v]); } }
+  else runY1();
+  for (let i = 0; i < EDGES.length; i++) { const e = EDGES[i]; if (prevP < e.x && S.p >= e.x) { S.edgesPassed++; if (S.det[i] == null) { S.det[i] = -1; S.laserTot.kacan++; addLog('Lazer', `${e.label} kaçırıldı`, 'kacan', false); } } }
+  for (const r of REGIONS) if (r.lateral && prevP < r.x1 && S.p >= r.x1) {
+    const lp = S.latPass[r.id];
+    S.lat.K0.kacan++;
+    if (!lp.first) { S.lat.K1.kacan++; addLog('Kamera', `${r.name.toLowerCase()} kaçırıldı`, 'kacan', false); }
+    lp.done = true; itemDirty = true;
+  }
+  if (S.pendingLevel) { if (S.t > S.pendingLevel.until) S.pendingLevel = null; else if (requestVib(S.pendingLevel.type, 'iki')) S.pendingLevel = null; }
+  S.tofAcc += dt; if (S.tofAcc >= 1 / 15) { S.tofAcc -= 1 / 15; tofFrame(init); }
+  S.camAcc += dt;
+  if (S.camAcc >= 0.2) { S.camAcc -= 0.2; if (!init) { camFrame(); S.camFAm = S.dist; } }
+  if (S.tick % 2 === 0) { S.hist.push({ t: S.t, a: S.camP[0], b: S.camP[2], th: S.thetaM }); while (S.hist.length && S.hist[0].t < S.t - 10.5) S.hist.shift(); }
+  while (S.events.length && S.events[0].t < S.t - 10.5) S.events.shift();
+  if (S.p >= P.passLen) newPass();
+}
+
+/* ---------- çizim ---------- */
+const css = {};
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ['surface', 'ink', 'ink-2', 'muted', 'line', 'axis', 'accent', 'sag', 'laser', 'tof', 'zone', 'cam', 'ground', 'ground-low', 'ground-edge', 'paint', 'tactile', 'good', 'bad']) css[k] = cs.getPropertyValue('--' + k).trim();
+}
+function alpha(hex, a) { const h = hex.replace('#', ''); const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+const FONT = '"IBM Plex Sans", "Segoe UI", Arial, sans-serif';
+const C = { scene: document.getElementById('scene'), top: document.getElementById('top'), cam: document.getElementById('cam'), chart: document.getElementById('chart') };
+const X2 = {}; for (const k in C) X2[k] = C[k].getContext('2d');
+let dpr = 1;
+function size(cv, ratio, minH) { const w = cv.parentElement.clientWidth - 32; const h = Math.max(minH, Math.round(w / ratio)); cv.style.height = h + 'px'; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+function fit() { dpr = window.devicePixelRatio || 1; size(C.scene, 2.6, 200); size(C.top, 1.75, 180); size(C.cam, 4 / 3, 180); C.chart.parentElement && size(C.chart, 4.2, 170); }
+function label(ctx, text, x, y, o = {}) {
+  ctx.font = `${o.weight || 500} ${o.size || 12}px ${FONT}`; ctx.textAlign = o.align || 'left'; ctx.textBaseline = 'alphabetic';
+  if (o.bg) { const w = ctx.measureText(text).width, s = o.size || 12; let bx = x - (ctx.textAlign === 'center' ? w / 2 : ctx.textAlign === 'right' ? w : 0) - 4; ctx.fillStyle = o.bg; rr(ctx, bx, y - s - 2, w + 8, s + 7, 4); ctx.fill(); }
+  ctx.fillStyle = o.color || css.ink; ctx.fillText(text, x, y);
+}
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+function drawScene() {
+  const ctx = X2.scene, W = C.scene.width / dpr, H = C.scene.height / dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = css.surface; ctx.fillRect(0, 0, W, H);
+  const vw = W < 560 ? 4.8 : 6.8, s = W / vw, x0 = S.p - (W < 560 ? 0.9 : 1.2), y0 = -0.6;
+  const X = x => (x - x0) * s, Y = y => H - (y - y0) * s, gF = groundAt(S.p);
+  const xa = x0 - 0.2, xb = x0 + vw + 0.2;
+  ctx.beginPath(); ctx.moveTo(X(xa), H + 2); ctx.lineTo(X(xa), Y(groundAt(xa)));
+  for (const g of GROUND) if (g.x0 > xa && g.x0 < xb) { ctx.lineTo(X(g.x0), Y(groundAt(g.x0 - 0.001))); ctx.lineTo(X(g.x0), Y(g.g)); }
+  ctx.lineTo(X(xb), Y(groundAt(xb))); ctx.lineTo(X(xb), H + 2); ctx.closePath();
+  ctx.fillStyle = css.ground; ctx.fill(); ctx.strokeStyle = css['ground-edge']; ctx.lineWidth = 1.5; ctx.stroke();
+  // kamera bandı (gerçekte incelenen)
+  if (S.tp >= P.initTime) {
+    const [a] = bandMap(BAND.x0, 0), [b] = bandMap(BAND.x1, 0);
+    ctx.strokeStyle = alpha(css.cam, 0.85); ctx.lineWidth = 5; ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.moveTo(X(S.p + a), Y(groundAt(S.p + a)) - 3); ctx.lineTo(X(S.p + Math.min(b, 8)), Y(groundAt(S.p + Math.min(b, 8))) - 3); ctx.stroke();
+    ctx.setLineDash([3, 3]); ctx.lineWidth = 1; ctx.strokeStyle = alpha(css.cam, 0.6);
+    for (const v of [a, Math.min(b, 8)]) { ctx.beginPath(); ctx.moveTo(X(S.p), Y(S.ys) + 3); ctx.lineTo(X(S.p + v), Y(groundAt(S.p + v))); ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
+  for (const o of OBS) {
+    if (o.x1 < xa || o.x0 > xb) continue;
+    ctx.strokeStyle = css['ink-2']; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X((o.x0 + o.x1) / 2), 0); ctx.lineTo(X((o.x0 + o.x1) / 2), Y(o.ya1)); ctx.stroke();
+    ctx.fillStyle = css['ink-2']; const rx = X(o.x0), rw = Math.max(4, (o.x1 - o.x0) * s); ctx.fillRect(rx, Y(o.ya1), rw, (o.ya1 - o.ya0) * s);
+    label(ctx, o.name, rx + rw + 6, Y(o.ya1) + 12, { size: 11.5, weight: 600 }); label(ctx, o.where, rx + rw + 6, Y(o.ya1) + 26, { size: 11, color: css['ink-2'] });
+  }
+  for (const e of EDGES) if (e.x > xa && e.x < xb) label(ctx, e.label, X(e.x) + (e.type === 'inis' ? 6 : -6), Y(Math.max(groundAt(e.x - 0.01), groundAt(e.x + 0.01))) - 10, { align: e.type === 'inis' ? 'left' : 'right', size: 11, weight: 600, color: css['ink-2'] });
+  const sx = X(S.p), sy = Y(S.ys);
+  for (const z of S.zones) {
+    let ex, ey;
+    if (z.best) { ex = X(z.best.x); ey = Y(z.best.y); } else { const e = (z.dc - S.theta) * DEG; ex = X(S.p + 3.5 * Math.cos(e)); ey = Y(S.ys + 3.5 * Math.sin(e)); }
+    ctx.strokeStyle = z.q ? css.zone : alpha(css.tof, z.best ? 0.5 : 0.22); ctx.lineWidth = z.q ? 2 : 1; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+  }
+  const ph = S.phase, hc = [X(S.p - 0.075), Y(gF + P.H + S.bob + 0.035)], hip = [X(S.p - 0.1), Y(gF + 0.95)], sh = [X(S.p - 0.09), Y(gF + 1.42 + S.bob)];
+  ctx.strokeStyle = css.ink; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(2.5, s * 0.05);
+  const legA = 0.28 * Math.sin(ph);
+  ctx.beginPath(); ctx.moveTo(...hip); ctx.lineTo(X(S.p - 0.1 + legA), Y(gF)); ctx.moveTo(...hip); ctx.lineTo(X(S.p - 0.1 - legA), Y(gF));
+  ctx.moveTo(...hip); ctx.lineTo(...sh); ctx.moveTo(...sh); ctx.lineTo(X(S.p - 0.1 - 0.12 * Math.sin(ph)), Y(gF + 0.82)); ctx.moveTo(...sh); ctx.lineTo(X(S.p + 0.14), Y(gF + 0.86)); ctx.stroke();
+  ctx.strokeStyle = css.muted; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(S.p + 0.14), Y(gF + 0.86)); ctx.lineTo(X(S.p + 0.95 + 0.12 * Math.sin(ph * 2)), Y(groundAt(S.p + 0.95))); ctx.stroke();
+  ctx.fillStyle = css.surface; ctx.strokeStyle = css.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(hc[0], hc[1], 0.1 * s, 0, 7); ctx.fill(); ctx.stroke();
+  if (S.hit) {
+    ctx.strokeStyle = css.laser; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(X(S.hit.x), Y(S.hit.y)); ctx.stroke();
+    ctx.fillStyle = css.laser; ctx.beginPath(); ctx.arc(X(S.hit.x), Y(S.hit.y), 4.5, 0, 7); ctx.fill();
+  }
+  label(ctx, `θ ${fmtTh(S.thBase)}`, hc[0] + 0.14 * s, hc[1] - 0.14 * s, { size: 11.5, weight: 600, bg: alpha(css.surface, 0.9) });
+  label(ctx, `Geçiş ${S.pass} · konum ${fmt(S.p, 1)} m / ${P.passLen} m`, W - 10, 18, { align: 'right', size: 12, weight: 600, bg: alpha(css.surface, 0.9) });
+  if (S.tp < P.initTime) label(ctx, `Başlatma: 2 s ayakta duruluyor (${fmt(P.initTime - S.tp, 1)} s)`, W - 10, 40, { align: 'right', size: 12, weight: 600, bg: alpha(css.zone, 0.35) });
+  else if (S.thWhy) label(ctx, `Kullanıcı ${S.thWhy}: baş ${fmtTh(S.thTarget)}`, W - 10, 40, { align: 'right', size: 12, bg: alpha(css.surface, 0.9) });
+  if (S.flash && S.t - S.flash.t < 1.2 && S.hit) label(ctx, `${TYPE[S.flash.type].toLocaleUpperCase('tr')} UYARISI`, X(S.hit.x), Y(S.hit.y) - 30, { align: 'center', size: 13, weight: 600, color: '#fff', bg: css.bad });
+}
+
+function drawTop() {
+  const ctx = X2.top, W = C.top.width / dpr, H = C.top.height / dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = css.ground; ctx.fillRect(0, 0, W, H);
+  const xr = [S.p - 0.8, S.p + 6.2], yr = 1.6;
+  const s = Math.min(W / (xr[1] - xr[0]), H / (2 * yr));
+  const ox = (W - (xr[1] - xr[0]) * s) / 2, oy = H / 2;
+  const X = x => ox + (x - xr[0]) * s, Y = y => oy - y * s;
+  const feet = levelAt(S.p, 0);
+  for (const r of REGIONS) {
+    const a = Math.max(r.x0, xr[0]), b = Math.min(r.x1, xr[1]); if (b <= a) continue;
+    ctx.fillStyle = css['ground-low'];
+    const yy0 = Math.max(r.y0, -yr), yy1 = Math.min(r.y1, yr);
+    ctx.fillRect(X(a), Y(yy1), (b - a) * s, (yy1 - yy0) * s);
+  }
+  ctx.strokeStyle = css['ground-edge']; ctx.lineWidth = 2;
+  for (const r of REGIONS) {
+    ctx.strokeRect(X(r.x0), Y(Math.min(r.y1, yr)), (r.x1 - r.x0) * s, (Math.min(r.y1, yr) - Math.max(r.y0, -yr)) * s);
+  }
+  DIS.forEach(d => {
+    const a = Math.max(d.x0, xr[0]), b = Math.min(d.x1, xr[1]); if (b <= a) return;
+    const yy0 = Math.max(d.y0, -yr), yy1 = Math.min(d.y1, yr);
+    if (d.type === 'boya') ctx.fillStyle = css.paint;
+    else if (d.type === 'hissedilebilir') ctx.fillStyle = css.tactile;
+    else ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(X(a), Y(yy1), (b - a) * s, (yy1 - yy0) * s);
+    if (d.type === 'hissedilebilir') { ctx.fillStyle = 'rgba(0,0,0,0.25)'; for (let x = a; x < b; x += 0.06) for (let y = yy0; y < yy1; y += 0.06) { ctx.beginPath(); ctx.arc(X(x + 0.03), Y(y + 0.03), Math.max(0.8, 0.012 * s), 0, 7); ctx.fill(); } }
+  });
+  // mesafe çizgileri
+  ctx.strokeStyle = alpha(css['ink-2'], 0.25); ctx.lineWidth = 1;
+  for (let k = 1; k <= 6; k++) { const xx = X(S.p + k); ctx.beginPath(); ctx.moveTo(xx, H - 14); ctx.lineTo(xx, H - 4); ctx.stroke(); label(ctx, `${k} m`, xx, H - 16, { align: 'center', size: 10, color: css['ink-2'] }); }
+  // lazer
+  if (S.hit) { ctx.strokeStyle = css.laser; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(S.p), Y(0)); ctx.lineTo(X(S.hit.x), Y(0)); ctx.stroke(); ctx.fillStyle = css.laser; ctx.beginPath(); ctx.arc(X(S.hit.x), Y(0), 4, 0, 7); ctx.fill(); }
+  // bant: varsayılan (kesikli) ve gerçekte incelenen (dolu, olasılığa göre)
+  if (S.tp >= P.initTime) {
+    BAND.regs.forEach(([name, y0, y1], r) => {
+      const pts = [[BAND.x0, y0], [BAND.x1, y0], [BAND.x1, y1], [BAND.x0, y1]].map(([a, b]) => bandMap(a, b));
+      ctx.beginPath(); pts.forEach(([a, b], i) => { const px = X(S.p + Math.min(a, 7)), py = Y(clamp(b, -yr, yr)); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.closePath();
+      const p = S.camP[r];
+      ctx.fillStyle = alpha(r === 0 ? css.accent : r === 2 ? css.sag : css.muted, 0.08 + 0.45 * p); ctx.fill();
+      const warn = r !== 1 && S.camLast[r] > S.t - 1.0;
+      ctx.strokeStyle = warn ? css.bad : css.cam; ctx.lineWidth = warn ? 3 : 1.5; ctx.stroke();
+      const [ca, cb] = bandMap((BAND.x0 + BAND.x1) / 2, (y0 + y1) / 2);
+      label(ctx, `${name === 'sag' ? 'sağ' : name} ${num(p, 2)}`, X(S.p + Math.min(ca, 6.8)), Y(clamp(cb, -yr, yr)) + 4, { align: 'center', size: 11, weight: 600, bg: alpha(css.surface, 0.8) });
+    });
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = css.cam; ctx.lineWidth = 1.2;
+    ctx.strokeRect(X(S.p + BAND.x0), Y(0.75), (BAND.x1 - BAND.x0) * s, 1.5 * s); ctx.setLineDash([]);
+  }
+  // kullanıcı
+  ctx.fillStyle = css.ink; ctx.beginPath(); ctx.arc(X(S.p), Y(0), 6, 0, 7); ctx.fill();
+  ctx.strokeStyle = css.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(S.p) + 6, Y(0)); ctx.lineTo(X(S.p) + 16, Y(0)); ctx.stroke();
+  label(ctx, 'sol ↑', 6, 14, { size: 10.5, color: css['ink-2'] }); label(ctx, 'sağ ↓', 6, H - 22, { size: 10.5, color: css['ink-2'] });
+}
+
+const CAMP = { bg: '#5b5d60', sky: '#c9ced3', ground: '#aaa9a3', low: '#7d7c77', edge: '#dcdbd5', paint: '#f1f1ee', tactile: '#c8c4ae', shadow: 'rgba(0,0,0,0.32)' };
+function drawCam() {
+  const ctx = X2.cam, W = C.cam.width / dpr, H = C.cam.height / dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const sc = W / 320, FXp = 200 * sc, CXp = W / 2, CYp = H / 2;
+  const a = (P.camPitch + S.theta) * DEG, Hc = S.ys, px = S.p;
+  const proj = (Xw, Yw, Zw) => { const dx = Xw - px, dy = Yw, dz = Zw - Hc; const xc = -dy, yc = -Math.sin(a) * dx - Math.cos(a) * dz, zc = Math.cos(a) * dx - Math.sin(a) * dz; return zc > 0.05 ? [FXp * xc / zc + CXp, FXp * yc / zc + CYp] : null; };
+  ctx.fillStyle = CAMP.bg; ctx.fillRect(0, 0, W, H);
+  const hz = CYp - FXp * Math.tan(a); // ufuk
+  const poly = (pts, z) => {
+    const near = px + 0.05, far = px + 12;
+    let q = pts.map(([x, y]) => [clamp(x, near, far), y]);
+    const pp = q.map(([x, y]) => proj(x, y, z)).filter(Boolean);
+    if (pp.length < 3) return false;
+    ctx.beginPath(); pp.forEach(([u, v], i) => i ? ctx.lineTo(u, v) : ctx.moveTo(u, v)); ctx.closePath(); return true;
+  };
+  const feet = levelAt(px, 0);
+  if (poly([[px, -6], [px + 12, -6], [px + 12, 6], [px, 6]], 0)) { ctx.fillStyle = CAMP.ground; ctx.fill(); }
+  if (hz > 0) { ctx.fillStyle = CAMP.sky; ctx.fillRect(0, 0, W, Math.min(H, hz)); }
+  for (const r of REGIONS) {
+    if (r.x1 < px + 0.05 || r.x0 > px + 12) continue;
+    const pts = [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]].map(([x, y]) => [x, clamp(y, -6, 6)]);
+    if (poly(pts, r.dz)) { ctx.fillStyle = CAMP.low; ctx.fill(); ctx.strokeStyle = CAMP.edge; ctx.lineWidth = 2.5; ctx.stroke(); }
+  }
+  DIS.forEach(d => {
+    if (d.x1 < px + 0.05 || d.x0 > px + 12) return;
+    const z = levelAt((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2);
+    if (poly([[d.x0, d.y0], [d.x1, d.y0], [d.x1, d.y1], [d.x0, d.y1]].map(([x, y]) => [x, clamp(y, -6, 6)]), z)) {
+      ctx.fillStyle = d.type === 'boya' ? CAMP.paint : d.type === 'hissedilebilir' ? CAMP.tactile : CAMP.shadow; ctx.fill();
+    }
+  });
+  if (S.tp >= P.initTime) {
+    BAND.regs.forEach(([name, y0, y1], r) => {
+      const pts = [[BAND.x0, y0], [BAND.x1, y0], [BAND.x1, y1], [BAND.x0, y1]].map(([xa, ya]) => { const [xt, yt] = bandMap(xa, ya); return proj(px + xt, yt, feet); });
+      if (pts.some(p => !p)) return;
+      ctx.beginPath(); pts.forEach(([u, v], i) => i ? ctx.lineTo(u, v) : ctx.moveTo(u, v)); ctx.closePath();
+      const warn = r !== 1 && S.camLast[r] > S.t - 1.0;
+      ctx.strokeStyle = warn ? css.bad : css.cam; ctx.lineWidth = warn ? 3 : 1.6; ctx.stroke();
+    });
+  }
+  ctx.font = `600 11px ${FONT}`; const camLab = ctx.measureText(`gri tonlu kamera · θ ${fmtTh(S.thBase)}`).width;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; rr(ctx, 6, 6, camLab + 12, 20, 4); ctx.fill();
+  label(ctx, `gri tonlu kamera · θ ${fmtTh(S.thBase)}`, 12, 20, { size: 11, weight: 600, color: '#fff' });
+}
+
+let hoverX = null;
+C.chart.addEventListener('mousemove', e => { const r = C.chart.getBoundingClientRect(); hoverX = e.clientX - r.left; });
+C.chart.addEventListener('mouseleave', () => { hoverX = null; });
+function drawChart() {
+  const ctx = X2.chart, W = C.chart.width / dpr, H = C.chart.height / dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = css.surface; ctx.fillRect(0, 0, W, H);
+  const L = 40, Rm = 10, top = 34, bot = H - 22, t1 = S.t, t0 = t1 - 10;
+  const TX = t => L + (t - t0) / 10 * (W - L - Rm), PY = v => bot - v * (bot - top);
+  ctx.lineWidth = 1;
+  for (const v of [0, 0.5, 1]) { ctx.strokeStyle = css.line; ctx.beginPath(); ctx.moveTo(L, Math.round(PY(v)) + 0.5); ctx.lineTo(W - Rm, Math.round(PY(v)) + 0.5); ctx.stroke(); label(ctx, num(v, 1), L - 6, PY(v) + 4, { align: 'right', size: 10.5, color: css.muted }); }
+  ctx.setLineDash([5, 4]); ctx.strokeStyle = css.muted; ctx.beginPath(); ctx.moveTo(L, PY(U.pi)); ctx.lineTo(W - Rm, PY(U.pi)); ctx.stroke(); ctx.setLineDash([]);
+  label(ctx, `π = ${num(U.pi, 2)}`, W - Rm - 4, PY(U.pi) - 5, { align: 'right', size: 10.5, color: css['ink-2'], bg: alpha(css.surface, 0.85) });
+  const lastLab = { sol: -1e9, sag: -1e9 };
+  for (const ev of S.events) {
+    if (ev.src !== 'K' || ev.t < t0) continue;
+    const x = TX(ev.t), col = ev.side === 'sol' ? css.accent : css.sag;
+    ctx.strokeStyle = alpha(col, 0.6); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(x, top - 2); ctx.lineTo(x, bot); ctx.stroke(); ctx.setLineDash([]);
+    if (x - lastLab[ev.side] > 80) { label(ctx, `${ev.side === 'sol' ? 'sol' : 'sağ'} ${ev.verdict === 'yanlis' ? '✗ yanlış' : ev.verdict === 'gec' ? '· geç' : '✓'}`, x + 3, ev.side === 'sol' ? 14 : 28, { size: 11, weight: 600, bg: alpha(col, 0.18) }); lastLab[ev.side] = x; }
+  }
+  const line = (key, col) => { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); let pen = false; for (const h of S.hist) { if (!Number.isFinite(h[key])) { pen = false; continue; } const x = TX(h.t), y = PY(h[key]); pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; } ctx.stroke(); };
+  line('a', css.accent); line('b', css.sag);
+  ctx.strokeStyle = css.axis; ctx.beginPath(); ctx.moveTo(L, bot + 0.5); ctx.lineTo(W - Rm, bot + 0.5); ctx.stroke();
+  for (const [d, txt] of [[10, '−10 s'], [5, '−5 s'], [0, 'şimdi']]) label(ctx, txt, TX(t1 - d), bot + 15, { align: d === 10 ? 'left' : d === 0 ? 'right' : 'center', size: 10.5, color: css.muted });
+  if (hoverX != null && hoverX >= L && hoverX <= W - Rm && S.hist.length) {
+    const th = t0 + (hoverX - L) / (W - L - Rm) * 10; let best = S.hist[0]; for (const h of S.hist) if (Math.abs(h.t - th) < Math.abs(best.t - th)) best = h;
+    const x = TX(best.t); ctx.strokeStyle = css.ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, top - 4); ctx.lineTo(x, bot); ctx.stroke();
+    const lines = [`${fmt(best.t - t1, 1)} s`, `sol: ${num(best.a, 2)}`, `sağ: ${num(best.b, 2)}`, `θ: ${fmtTh(best.th)}`];
+    ctx.font = `500 12px ${FONT}`; const bw = Math.max(...lines.map(l => ctx.measureText(l).width)) + 16, bh = lines.length * 16 + 8;
+    let bx = x + 10; if (bx + bw > W - 4) bx = x - 10 - bw;
+    ctx.fillStyle = css.surface; ctx.strokeStyle = css.axis; rr(ctx, bx, top, bw, bh, 6); ctx.fill(); ctx.stroke();
+    lines.forEach((l, i) => label(ctx, l, bx + 8, top + 16 + i * 16, { size: 12, weight: i ? 500 : 600, color: i ? css.ink : css['ink-2'] }));
+  }
+}
+
+/* ---------- panel ---------- */
+const $ = id => document.getElementById(id);
+function chip(el, cls, text) { if (el.className !== 'chip ' + cls) el.className = 'chip ' + cls; if (el.textContent !== text) el.textContent = text; }
+function updatePanel() {
+  const init = S.tp < P.initTime;
+  $('nTheta').textContent = `${num(S.thetaM, 1)}° ${S.thetaM >= 0 ? 'aşağı' : 'yukarı'}`;
+  if (!init) { const [a] = bandMap(BAND.x0, 0), [b] = bandMap(BAND.x1, 0); $('nBand').textContent = `${fmt(a, 2)}–${b > 20 ? '∞' : fmt(b, 2)} m`; } else $('nBand').textContent = '—';
+  $('nP').textContent = init ? '—' : S.camP.map(p => num(p, 2)).join(' / ');
+  $('nDz').textContent = init || !Number.isFinite(S.y1.val) ? '—' : `${fmtS(S.y1.val * 100, 1)} cm`;
+  const m = S.y1;
+  if (init) chip($('stL'), 'off', 'başlatılıyor');
+  else if (!m.valid) chip($('stL'), 'off', 'karar yok');
+  else if (m.cond) chip($('stL'), m.cnt >= 10 ? 'alert' : 'pend', `${TYPE[m.cond].toLocaleLowerCase('tr')} ${m.cnt >= 10 ? 'algılandı' : 'koşulu'}`);
+  else chip($('stL'), 'ok', 'düz zemin');
+  const ab = [0, 2].filter(r => S.camP[r] > U.pi);
+  if (init) chip($('stC'), 'off', 'başlatılıyor');
+  else if (ab.length) chip($('stC'), 'pend', `${ab.map(r => r ? 'sağ' : 'sol').join(' ve ')} eşiğin üstünde`);
+  else chip($('stC'), U.cam === 'K1' ? 'ok' : 'off', U.cam === 'K1' ? 'yanlarda seviye farkı yok' : 'uyarılar kapalı (K0)');
+  if (S.fwd) chip($('stF'), 'alert', `${TYPE[S.fwd.cls].toLocaleLowerCase('tr')} engel · ${SIDE_ADJ[S.fwd.side]}`); else chip($('stF'), init ? 'off' : 'ok', init ? 'başlatılıyor' : 'yolda engel yok');
+  for (const [k, id] of [['K0', 'k0'], ['K1', 'k1']]) { const t = S.lat[k]; $(id + 'z').textContent = t.zaman; $(id + 'g').textContent = t.gec; $(id + 'k').textContent = t.kacan; }
+  $('k1y').textContent = S.camFA; $('k1y100').textContent = S.dist > 1 ? fmt(100 * S.camFA / S.dist, 2) : '—';
+  const n = S.lat.K1.zaman + S.lat.K1.gec + S.lat.K1.kacan;
+  $('kTot').textContent = `${n} yandaki seviye farkı tamamlandı · ${fmt(S.dist, 0)} m yürüyüş · ${S.pass}. geçiş. Ön denemede (sentetik) 60 noktalı model, yanlış uyarı neredeyse sıfırken yandaki farkların yaklaşık %40’ını yakaladı.`;
+  if (logDirty) {
+    const VERD = { dogru: ['ok', '✓ doğru'], gec: ['pend', 'geç'], yanlis: ['alert', '✗ yanlış'], kacan: ['alert', 'kaçırıldı'], bilgi: ['off', 'bilgi'] };
+    $('log').innerHTML = S.log.slice(0, 9).map(e => { const [c, tx] = VERD[e.verdict]; const col = e.src === 'Kamera' ? 'c-cam' : ''; return `<li><span class="t">${num(e.t, 1)} s</span><span class="src ${col}">${e.src}</span><span>${e.text}${e.vib ? '<span class="vib">· titreşim</span>' : ''}</span><span class="chip ${c}">${tx}</span></li>`; }).join('');
+    logDirty = false;
+  }
+  const sig = [S.pass, Math.floor(S.p), S.det.join(), JSON.stringify(S.latPass), S.disStat.join(), S.obsStat.map(o => o.warn ? 1 : 0).join()].join('|');
+  if (sig !== lastSig) { itemDirty = true; lastSig = sig; }
+  if (itemDirty) {
+    const rows = [];
+    for (const r of REGIONS) {
+      if (!r.lateral) { rows.push(`<tr><td><b>${r.name}</b><br><span class="small" style="margin:0">16 m iniş, 21 m çıkış</span></td><td>Lazer</td><td>${S.det.map((d, i) => d == null ? `<span class="chip off">${EDGES[i].type === 'inis' ? 'iniş' : 'çıkış'}: bekleniyor</span>` : d < 0 ? `<span class="chip alert">kaçırıldı</span>` : `<span class="chip ${d >= 1 ? 'ok' : 'pend'}">${d >= 1 ? '✓' : 'geç'} ${fmt(d, 2)} m</span>`).join(' ')}</td></tr>`); continue; }
+      const lp = S.latPass[r.id] || {};
+      let st = '<span class="chip off">henüz ulaşılmadı</span>';
+      if (lp.first) st = `<span class="chip ${lp.first.d >= 1 ? 'ok' : 'pend'}">${lp.first.d >= 1 ? '✓ zamanında' : 'geç'}</span>`;
+      else if (lp.done) st = '<span class="chip alert">✗ kaçırıldı</span>';
+      rows.push(`<tr><td><b>${r.name}</b><br><span class="small" style="margin:0">${r.x0}–${r.x1} m</span></td><td class="c-cam">Kamera</td><td>${st}</td></tr>`);
+    }
+    DIS.forEach((d, i) => { const n = S.disStat[i]; rows.push(`<tr><td><b>${d.name}</b><br><span class="small" style="margin:0">çeldirici · ${num(d.x0, d.x0 % 1 ? 1 : 0)} m</span></td><td class="c-cam">Kamera</td><td>${n ? `<span class="chip alert">✗ ${n} yanlış uyarı</span>` : (S.p > d.x1 - 1 ? '<span class="chip ok">✓ uyarı yok</span>' : '<span class="chip off">henüz ulaşılmadı</span>')}</td></tr>`); });
+    OBS.forEach((o, i) => { const st = S.obsStat[i]; rows.push(`<tr><td><b>${o.name}</b><br><span class="small" style="margin:0">${o.where}</span></td><td>Öne bakan</td><td>${st.warn ? `<span class="chip ok">✓ ${TYPE[st.warn.cls]} · ${fmt(st.warn.d, 2)} m</span>` : (S.p > o.x0 ? '<span class="chip alert">✗ bildirilmedi</span>' : '<span class="chip off">henüz ulaşılmadı</span>')}</td></tr>`); });
+    $('itemBody').innerHTML = rows.join(''); itemDirty = false;
+  }
+}
+function updateMotors() {
+  const ms = motorState();
+  $('mL').classList.toggle('on', ms.L); $('mR').classList.toggle('on', ms.R);
+  const vn = $('vibNow');
+  if (ms.v) { vn.className = 'vibnow'; vn.textContent = `${TYPE[ms.v.type]} · ${SIDE[ms.v.side]} · ${PATDESC[ms.v.type]}`; }
+  else if (vn.className !== 'vibnow idle') { vn.className = 'vibnow idle'; vn.textContent = 'Titreşim yok'; }
+  if (audio) { const now = audio.ac.currentTime; audio.L.gain.setTargetAtTime(U.sound && U.playing && ms.L ? 0.05 : 0, now, 0.004); audio.R.gain.setTargetAtTime(U.sound && U.playing && ms.R ? 0.05 : 0, now, 0.004); }
+}
+let audio = null;
+function ensureAudio() {
+  if (audio) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext, ac = new AC();
+    const mk = pan => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 165; const g = ac.createGain(); g.gain.value = 0; o.connect(g); if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = pan; g.connect(p); p.connect(ac.destination); } else g.connect(ac.destination); o.start(); return g; };
+    audio = { ac, L: mk(-1), R: mk(1) };
+  } catch (e) { audio = null; }
+}
+
+/* ---------- kontroller ---------- */
+const playBtn = $('playBtn');
+function setPlaying(v) { U.playing = v; playBtn.textContent = v ? 'Duraklat' : 'Oynat'; }
+playBtn.addEventListener('click', () => setPlaying(!U.playing));
+C.scene.addEventListener('click', () => setPlaying(!U.playing));
+function reset() { S = freshState(); S.diff = Object.assign(newDifficulty(), { R1: 1.4, R3: -0.6, D0: 0.2, D1: 1.4 }); S.latPass = { R1: {}, R3: {} }; addLog('Sistem', '1. geçiş başladı · 2 s ayakta başlatma', 'bilgi', false); itemDirty = true; }
+$('resetBtn').addEventListener('click', reset);
+function seg(id, key, parse, after) {
+  const el = $(id);
+  el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; U[key] = parse(b.dataset.v); el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); if (after) after(); });
+}
+seg('speedSeg', 'speed', Number);
+seg('camSeg', 'cam', String, () => addLog('Sistem', U.cam === 'K1' ? 'Kamera uyarıları açıldı (K1)' : 'Kamera uyarıları kapatıldı (K0)', 'bilgi', false));
+seg('bandSeg', 'band', String, () => addLog('Sistem', U.band === 'egim' ? 'Zemin bandı baş eğimine göre seçiliyor' : 'Zemin bandı sabit (baş düz varsayılıyor)', 'bilgi', false));
+$('headMode').addEventListener('change', e => { U.mode = e.target.value; });
+$('thetaSlider').addEventListener('input', e => { U.manual = Number(e.target.value); $('thetaVal').textContent = fmtTh(U.manual); if (U.mode !== 'elle') { U.mode = 'elle'; $('headMode').value = 'elle'; } });
+$('dataSel').addEventListener('change', e => { U.data = e.target.value; });
+$('piSlider').addEventListener('input', e => { U.pi = Number(e.target.value); $('piVal').textContent = num(U.pi, 2); });
+$('soundChk').addEventListener('change', e => { U.sound = e.target.checked; if (U.sound) { ensureAudio(); if (audio) audio.ac.resume().catch(() => {}); } });
+document.addEventListener('keydown', e => { if (e.code === 'Space' && !['INPUT', 'SELECT', 'BUTTON'].includes(document.activeElement.tagName)) { e.preventDefault(); setPlaying(!U.playing); } });
+
+readTokens();
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTokens);
+new MutationObserver(readTokens).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+fit();
+new ResizeObserver(() => fit()).observe(document.querySelector('.main'));
+reset();
+while (S.pass === 1 && S.p < 5.6) step();
+if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) setPlaying(false);
+let last = performance.now(), acc = 0, lastPanel = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (U.playing) { acc += dt * U.speed; let n = 0; while (acc >= 0.01 && n < 40) { step(); acc -= 0.01; n++; } if (n >= 40) acc = 0; }
+  drawScene(); drawTop(); drawCam(); drawChart(); updateMotors();
+  if (now - lastPanel > 90) { updatePanel(); lastPanel = now; }
+  requestAnimationFrame(frame);
+}
+updatePanel();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
