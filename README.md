@@ -1,1 +1,0 @@
-# akilli-gozluk-kamerali
